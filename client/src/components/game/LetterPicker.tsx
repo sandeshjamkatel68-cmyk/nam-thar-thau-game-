@@ -20,17 +20,17 @@ export const LetterPicker: React.FC<LetterPickerProps> = ({ letters, onPick, dis
   };
 
   return (
-    <div className="grid grid-cols-3 gap-4 max-w-md mx-auto">
+    <div className="grid grid-cols-5 sm:grid-cols-6 gap-3 max-w-2xl mx-auto">
       {letters.map((letter, i) => (
         <button
           key={i}
           disabled={disabled || pickedIndex !== null}
           onClick={() => handlePick(letter, i)}
           className={cn(
-            "aspect-square rounded-2xl flex items-center justify-center text-4xl font-heading font-bold shadow-lg transition-all duration-300 transform",
-            pickedIndex === i 
-              ? "bg-primary text-white scale-110 shadow-primary/50" 
-              : "bg-surface-light text-text-secondary hover:bg-surface hover:text-white hover:-translate-y-2 border border-white/5 hover:border-white/20",
+            "aspect-square rounded-xl flex items-center justify-center text-2xl sm:text-3xl font-heading font-bold shadow-lg transition-all duration-300 transform",
+            pickedIndex === i
+              ? "bg-primary text-white scale-110 shadow-primary/50"
+              : "bg-surface-light text-text-secondary hover:bg-surface hover:text-white hover:-translate-y-1 border border-white/5 hover:border-white/20",
             disabled && pickedIndex !== i && "opacity-50 cursor-not-allowed hover:translate-y-0"
           )}
         >

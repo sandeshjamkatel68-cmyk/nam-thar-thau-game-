@@ -15,7 +15,7 @@ import {
 import { roomManager } from '../managers/RoomManager.js';
 import { gameManager } from '../managers/GameManager.js';
 import { timerManager } from '../managers/TimerManager.js';
-import { getRandomLetters } from '../utils/letters.js';
+import { getAllLetters } from '../utils/letters.js';
 import { randomUUID } from 'crypto';
 
 export function registerSocketHandlers(io: Server) {
@@ -113,7 +113,7 @@ export function registerSocketHandlers(io: Server) {
         io.to(payload.roomCode).emit(SocketEvents.GAME_STARTED);
         
         // Send round start with letter options to the picker
-        const letterOptions = getRandomLetters(6);
+        const letterOptions = getAllLetters();
         io.to(payload.roomCode).emit(SocketEvents.GAME_ROUND_START, {
           roundNumber: roundState.roundNumber,
           letterPickerId: roundState.letterPickerId,
@@ -191,7 +191,7 @@ export function registerSocketHandlers(io: Server) {
         const roundState = gameManager.nextRound(payload.roomCode);
         
         if (roundState) {
-          const letterOptions = getRandomLetters(6);
+          const letterOptions = getAllLetters();
           io.to(payload.roomCode).emit(SocketEvents.GAME_ROUND_START, {
             roundNumber: roundState.roundNumber,
             letterPickerId: roundState.letterPickerId,

@@ -34,7 +34,7 @@ export const EMPTY_ANSWERS: Answers = {
 };
 
 // --- Answer Status ---
-export type AnswerStatus = 'unique' | 'duplicate' | 'invalid' | 'empty';
+export type AnswerStatus = 'unique' | 'duplicate' | 'invalid' | 'empty' | 'repeated';
 
 export type AnswerStatuses = Record<Category, AnswerStatus>;
 
@@ -132,8 +132,8 @@ export interface ChatMessage {
 // --- Letter Pool ---
 export const LETTER_POOL = [
   'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J',
-  'K', 'L', 'M', 'N', 'O', 'P', 'R', 'S', 'T', 'U',
-  'V', 'W', 'Y'
+  'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T',
+  'U', 'V', 'W', 'X', 'Y', 'Z'
 ] as const;
 
 // --- Avatar Colors ---

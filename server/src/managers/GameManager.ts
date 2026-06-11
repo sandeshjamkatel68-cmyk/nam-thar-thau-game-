@@ -4,9 +4,20 @@ import { calculateRoundScores } from '../utils/scoring.js';
 import { roomManager } from './RoomManager.js';
 import { timerManager } from './TimerManager.js';
 
+function createEmptyUsedWords(): Record<Category, Set<string>> {
+  return {
+    name: new Set(),
+    surname: new Set(),
+    place: new Set(),
+    food: new Set(),
+    animal: new Set()
+  };
+}
+
 class GameManager {
   private activeRounds: Map<string, RoundState> = new Map();
   private leaderboards: Map<string, LeaderboardEntry[]> = new Map();
+  private usedWords: Map<string, Record<Category, Set<string>>> = new Map();
 
   startGame(roomCode: string): RoundState {
     const room = roomManager.getRoom(roomCode);
@@ -31,6 +42,7 @@ class GameManager {
     };
 
     this.activeRounds.set(roomCode, roundState);
+    this.usedWords.set(roomCode, createEmptyUsedWords());
 
     // Init leaderboard
     const initialLeaderboard: LeaderboardEntry[] = room.players.map((p, i) => ({
@@ -132,9 +144,10 @@ class GameManager {
     if (!roundState || !room) throw new Error('Round or Room not found');
 
     roundState.phase = 'results';
-    
-    // Calculate scores
-    const results = calculateRoundScores(roundState.submissions, roundState.letter, room.players);
+
+    // Calculate scores (also records this round's words to detect repeats in future rounds)
+    const usedWords = this.usedWords.get(roomCode) || createEmptyUsedWords();
+    const results = calculateRoundScores(roundState.submissions, roundState.letter, room.players, usedWords);
     roundState.results = results;
 
     // Determine round winner
@@ -244,6 +257,7 @@ class GameManager {
   cleanupRoom(roomCode: string) {
     this.activeRounds.delete(roomCode);
     this.leaderboards.delete(roomCode);
+    this.usedWords.delete(roomCode);
   }
 }
 

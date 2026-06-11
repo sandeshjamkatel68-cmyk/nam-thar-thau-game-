@@ -15,6 +15,7 @@ export const RoundResults: React.FC<RoundResultsProps> = ({ results }) => {
     switch(status) {
       case 'unique': return 'bg-success/20 text-success border-success/30';
       case 'duplicate': return 'bg-danger/20 text-danger border-danger/30';
+      case 'repeated': return 'bg-warning/20 text-warning border-warning/30 line-through';
       case 'invalid': return 'bg-surface-light text-text-secondary border-white/10';
       case 'empty': return 'bg-surface-light text-text-secondary opacity-50 border-white/5';
       default: return '';
@@ -48,7 +49,11 @@ export const RoundResults: React.FC<RoundResultsProps> = ({ results }) => {
                   <div className={cn(
                     "px-3 py-2 rounded-lg text-sm border font-medium mx-auto max-w-[120px] truncate",
                     getStatusColor(result.answerStatuses[cat])
-                  )} title={result.answers[cat] || '-'}>
+                  )} title={
+                    result.answerStatuses[cat] === 'repeated'
+                      ? `${result.answers[cat]} (already used in an earlier round)`
+                      : result.answers[cat] || '-'
+                  }>
                     {result.answers[cat] || '-'}
                   </div>
                 </td>

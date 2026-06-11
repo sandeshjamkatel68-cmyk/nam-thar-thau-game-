@@ -30,11 +30,11 @@ const SubmissionSchema = new Schema<Submission>({
 });
 
 const AnswerStatusesSchema = new Schema({
-  name: { type: String, enum: ['unique', 'duplicate', 'invalid', 'empty'], required: true },
-  surname: { type: String, enum: ['unique', 'duplicate', 'invalid', 'empty'], required: true },
-  place: { type: String, enum: ['unique', 'duplicate', 'invalid', 'empty'], required: true },
-  food: { type: String, enum: ['unique', 'duplicate', 'invalid', 'empty'], required: true },
-  animal: { type: String, enum: ['unique', 'duplicate', 'invalid', 'empty'], required: true },
+  name: { type: String, enum: ['unique', 'duplicate', 'invalid', 'empty', 'repeated'], required: true },
+  surname: { type: String, enum: ['unique', 'duplicate', 'invalid', 'empty', 'repeated'], required: true },
+  place: { type: String, enum: ['unique', 'duplicate', 'invalid', 'empty', 'repeated'], required: true },
+  food: { type: String, enum: ['unique', 'duplicate', 'invalid', 'empty', 'repeated'], required: true },
+  animal: { type: String, enum: ['unique', 'duplicate', 'invalid', 'empty', 'repeated'], required: true },
 }, { _id: false });
 
 const ScoresSchema = new Schema({
