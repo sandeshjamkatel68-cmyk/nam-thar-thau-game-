@@ -1,0 +1,63 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --primary: #E11D48;
+  --secondary: #1E3A5F;
+  --accent: #F59E0B;
+  --background: #0F172A;
+  --surface: #1E293B;
+  --surface-light: #334155;
+  --success: #10B981;
+  --danger: #EF4444;
+  --muted: #64748B;
+  --text-primary: #F8FAFC;
+  --text-secondary: #94A3B8;
+}
+
+body {
+  background-color: var(--background);
+  color: var(--text-primary);
+  font-family: var(--font-inter), sans-serif;
+  overflow-x: hidden;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-outfit), sans-serif;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--background);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--surface-light);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--muted);
+}
+
+@layer utilities {
+  .glass {
+    @apply bg-opacity-70 backdrop-blur-md border border-white/10;
+    background-color: var(--surface);
+  }
+  
+  .glass-light {
+    @apply bg-opacity-70 backdrop-blur-md border border-white/10;
+    background-color: var(--surface-light);
+  }
+
+  .text-gradient {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-primary to-accent;
+  }
+}
