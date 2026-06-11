@@ -68,6 +68,7 @@ export function registerSocketHandlers(io: Server) {
           ? gameManager.getReviewOverrides(payload.roomCode)
           : [];
         const letterOptions = getAllLetters();
+        const usedLetters = gameManager.getUsedLetters(payload.roomCode);
 
         socket.emit(SocketEvents.ROOM_REJOIN_SUCCESS, {
           room,
@@ -75,7 +76,8 @@ export function registerSocketHandlers(io: Server) {
           leaderboard,
           chatMessages,
           reviewOverrides,
-          letterOptions
+          letterOptions,
+          usedLetters
         });
 
         socket.to(payload.roomCode).emit(SocketEvents.ROOM_PLAYER_RECONNECTED, {
@@ -156,7 +158,8 @@ export function registerSocketHandlers(io: Server) {
           roundNumber: roundState.roundNumber,
           letterPickerId: roundState.letterPickerId,
           letterPickerName: roundState.letterPickerName,
-          letterOptions
+          letterOptions,
+          usedLetters: gameManager.getUsedLetters(payload.roomCode)
         });
 
       } catch (error: any) {
@@ -234,7 +237,8 @@ export function registerSocketHandlers(io: Server) {
             roundNumber: roundState.roundNumber,
             letterPickerId: roundState.letterPickerId,
             letterPickerName: roundState.letterPickerName,
-            letterOptions
+            letterOptions,
+            usedLetters: gameManager.getUsedLetters(payload.roomCode)
           });
         } else {
           // Game Over

@@ -15,7 +15,7 @@ import { Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 export default function GamePage() {
-  const { room, roundState, playerProgress } = useGame();
+  const { room, roundState, playerProgress, rejoining } = useGame();
   const { socketId } = usePlayer();
   const { socket } = useSocket();
   const { playSound } = useSound();
@@ -24,18 +24,20 @@ export default function GamePage() {
   const [showChat, setShowChat] = useState(false);
 
   useEffect(() => {
+    if (rejoining) return;
+
     if (!room || !roundState) {
       router.push('/');
       return;
     }
-    
+
     // Play sounds on phase changes
     if (roundState.phase === 'picking-letter') playSound('roundStart');
     if (roundState.phase === 'stopped') playSound('stop');
 
-  }, [room, roundState?.phase, router, playSound]);
+  }, [room, roundState?.phase, rejoining, router, playSound]);
 
-  if (!room || !roundState) {
+  if (rejoining || !room || !roundState) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <Loader2 className="w-12 h-12 text-primary animate-spin" />
@@ -70,9 +72,10 @@ export default function GamePage() {
                 <>
                   <p className="text-text-secondary mb-8">You are the picker! Choose a letter to start the round.</p>
                   {/* The server sends letterOptions via GAME_ROUND_START, but we store it in roundState hackily for now. If not, use generic letters */}
-                  <LetterPicker 
-                    letters={(roundState as any).letterOptions || ['A','B','C','M','S','K']} 
-                    onPick={handlePickLetter} 
+                  <LetterPicker
+                    letters={(roundState as any).letterOptions || ['A','B','C','M','S','K']}
+                    usedLetters={(roundState as any).usedLetters || []}
+                    onPick={handlePickLetter}
                   />
                 </>
               ) : (

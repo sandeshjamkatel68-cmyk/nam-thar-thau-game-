@@ -16,7 +16,7 @@ import { cn } from '../../../lib/utils';
 import { clearRoomSession } from '../../../lib/session';
 
 export default function ResultsPage() {
-  const { room, roundState, leaderboard, finalResults, reviewOverrides } = useGame();
+  const { room, roundState, leaderboard, finalResults, reviewOverrides, rejoining } = useGame();
   const { socketId } = usePlayer();
   const { socket } = useSocket();
   const { playSound } = useSound();
@@ -27,20 +27,22 @@ export default function ResultsPage() {
   const [showConfetti, setShowConfetti] = useState(false);
 
   useEffect(() => {
+    if (rejoining) return;
+
     if (!room) {
       router.push('/');
       return;
     }
-    
+
     if (isFinal && finalResults) {
       playSound('winner');
       setShowConfetti(true);
       const timer = setTimeout(() => setShowConfetti(false), 5000);
       return () => clearTimeout(timer);
     }
-  }, [room, isFinal, finalResults, router, playSound]);
+  }, [room, isFinal, finalResults, rejoining, router, playSound]);
 
-  if (!room || (!roundState && !isFinal)) {
+  if (rejoining || !room || (!roundState && !isFinal)) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <Loader2 className="w-12 h-12 text-primary animate-spin" />

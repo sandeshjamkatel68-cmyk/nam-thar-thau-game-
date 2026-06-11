@@ -290,6 +290,7 @@ export interface RoomRejoinSuccessPayload {
   chatMessages: ChatMessage[];
   reviewOverrides: ReviewOverrideKey[];
   letterOptions: string[];
+  usedLetters: string[];
 }
 
 export interface PlayerReconnectedPayload {
@@ -307,6 +308,7 @@ export interface RoundStartPayload {
   letterPickerId: string;
   letterPickerName: string;
   letterOptions: string[];
+  usedLetters: string[];
 }
 
 export interface LetterPickedPayload {

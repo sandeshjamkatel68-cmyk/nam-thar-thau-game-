@@ -22,6 +22,7 @@ interface GameContextType {
   finalResults: GameFinishedPayload | null;
   reviewOverrides: string[]; // "playerId|category" keys marked invalid by host during review
   error: string | null;
+  rejoining: boolean; // true while attempting to restore a saved session on (re)connect
   clearError: () => void;
 }
 
@@ -39,29 +40,41 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   const [finalResults, setFinalResults] = useState<GameFinishedPayload | null>(null);
   const [reviewOverrides, setReviewOverrides] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
+  // Starts true so pages know to wait (instead of bouncing to home) while we
+  // check for and restore a saved session on mount/reconnect.
+  const [rejoining, setRejoining] = useState(true);
 
   // Attempt to rejoin a previously-saved room whenever the socket (re)connects
   // (covers page refresh, accidental back/forward, and dropped connections).
   useEffect(() => {
     if (!socket) return;
 
+    const savedRoomCode = getSavedRoomCode();
+    const savedPlayerName = sessionStorage.getItem('namTharThauPlayerName');
+
+    if (!savedRoomCode || !savedPlayerName) {
+      setRejoining(false);
+      return;
+    }
+
     const attemptRejoin = () => {
-      const savedRoomCode = getSavedRoomCode();
-      const savedPlayerName = sessionStorage.getItem('namTharThauPlayerName');
-      if (savedRoomCode && savedPlayerName) {
-        socket.emit(SocketEvents.ROOM_REJOIN, {
-          roomCode: savedRoomCode,
-          playerName: savedPlayerName,
-          clientId: getClientId()
-        });
-      }
+      socket.emit(SocketEvents.ROOM_REJOIN, {
+        roomCode: savedRoomCode,
+        playerName: savedPlayerName,
+        clientId: getClientId()
+      });
     };
 
     socket.on('connect', attemptRejoin);
     if (socket.connected) attemptRejoin();
 
+    // Safety net: don't leave pages stuck on a loading spinner forever if the
+    // server never responds (e.g. socket can't connect at all).
+    const timeout = setTimeout(() => setRejoining(false), 6000);
+
     return () => {
       socket.off('connect', attemptRejoin);
+      clearTimeout(timeout);
     };
   }, [socket]);
 
@@ -85,12 +98,14 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       setRoom(data.room);
       setRoundState(data.roundState ? {
         ...data.roundState,
-        letterOptions: data.letterOptions
+        letterOptions: data.letterOptions,
+        usedLetters: data.usedLetters
       } as any : null);
       setLeaderboard(data.leaderboard);
       setChatMessages(data.chatMessages);
       setReviewOverrides(data.reviewOverrides);
       setError(null);
+      setRejoining(false);
       saveRoomSession(data.room.roomCode);
 
       const phase = data.roundState?.phase;
@@ -108,6 +123,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 
     socket.on(SocketEvents.ROOM_REJOIN_FAILED, (data: { message: string }) => {
       clearRoomSession();
+      setRejoining(false);
       setError(data.message || "Couldn't reconnect to your previous game.");
       router.push('/');
     });
@@ -168,7 +184,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       setLeaderboard([]);
     });
 
-    socket.on(SocketEvents.GAME_ROUND_START, (data: RoundStartPayload & { letterOptions: string[] }) => {
+    socket.on(SocketEvents.GAME_ROUND_START, (data: RoundStartPayload) => {
       setRoundState({
         roundNumber: data.roundNumber,
         letterPickerId: data.letterPickerId,
@@ -179,7 +195,8 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
         stoppedBy: null,
         submissions: [],
         results: [],
-        letterOptions: data.letterOptions // Storing temporarily in state for the picker
+        letterOptions: data.letterOptions, // Storing temporarily in state for the picker
+        usedLetters: data.usedLetters
       } as any);
       setPlayerProgress({});
       if (room) router.push(`/game/${room.roomCode}`);
@@ -279,7 +296,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <GameContext.Provider value={{
-      room, roundState, leaderboard, chatMessages, playerProgress, finalResults, reviewOverrides, error, clearError
+      room, roundState, leaderboard, chatMessages, playerProgress, finalResults, reviewOverrides, error, rejoining, clearError
     }}>
       {children}
     </GameContext.Provider>

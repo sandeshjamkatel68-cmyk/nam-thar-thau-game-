@@ -18,6 +18,7 @@ class GameManager {
   private activeRounds: Map<string, RoundState> = new Map();
   private leaderboards: Map<string, LeaderboardEntry[]> = new Map();
   private usedWords: Map<string, Record<Category, Set<string>>> = new Map();
+  private usedLetters: Map<string, Set<string>> = new Map();
   private draftResults: Map<string, PlayerRoundResult[]> = new Map();
   private reviewOverrides: Map<string, Set<string>> = new Map();
 
@@ -45,6 +46,7 @@ class GameManager {
 
     this.activeRounds.set(roomCode, roundState);
     this.usedWords.set(roomCode, createEmptyUsedWords());
+    this.usedLetters.set(roomCode, new Set());
 
     // Init leaderboard
     const initialLeaderboard: LeaderboardEntry[] = room.players.map((p, i) => ({
@@ -67,6 +69,13 @@ class GameManager {
     if (roundState.letterPickerId !== playerId) {
       throw new Error('You are not the designated letter picker');
     }
+
+    const usedLetters = this.usedLetters.get(roomCode) || new Set();
+    if (usedLetters.has(letter)) {
+      throw new Error('This letter has already been used in this game');
+    }
+    usedLetters.add(letter);
+    this.usedLetters.set(roomCode, usedLetters);
 
     roundState.letter = letter;
     roundState.phase = 'playing';
@@ -320,6 +329,10 @@ class GameManager {
   getReviewOverrides(roomCode: string): string[] {
     return Array.from(this.reviewOverrides.get(roomCode) || []);
   }
+
+  getUsedLetters(roomCode: string): string[] {
+    return Array.from(this.usedLetters.get(roomCode) || []);
+  }
   
   // Re-points all in-memory references from a player's old socket id to their new
   // one after a reconnect, so submissions/results/leaderboard stay attached to them.
@@ -368,6 +381,7 @@ class GameManager {
     this.activeRounds.delete(roomCode);
     this.leaderboards.delete(roomCode);
     this.usedWords.delete(roomCode);
+    this.usedLetters.delete(roomCode);
     this.draftResults.delete(roomCode);
     this.reviewOverrides.delete(roomCode);
   }

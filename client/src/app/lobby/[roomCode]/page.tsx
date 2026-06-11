@@ -15,12 +15,14 @@ import { useRouter } from 'next/navigation';
 import { clearRoomSession } from '../../../lib/session';
 
 export default function LobbyPage() {
-  const { room, error } = useGame();
+  const { room, error, rejoining } = useGame();
   const { socketId } = usePlayer();
   const { socket } = useSocket();
   const router = useRouter();
 
   useEffect(() => {
+    if (rejoining) return;
+
     if (error || !room) {
       // If we're here without a room, go home
       const timeout = setTimeout(() => {
@@ -28,9 +30,9 @@ export default function LobbyPage() {
       }, 3000);
       return () => clearTimeout(timeout);
     }
-  }, [room, error, router]);
+  }, [room, error, rejoining, router]);
 
-  if (!room) {
+  if (rejoining || !room) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <Loader2 className="w-12 h-12 text-primary animate-spin" />
