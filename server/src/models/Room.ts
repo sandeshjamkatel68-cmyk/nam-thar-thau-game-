@@ -8,6 +8,7 @@ export interface RoomDocument extends Document, Omit<IRoom, 'players' | 'setting
 
 const PlayerSchema = new Schema<Player>({
   socketId: { type: String, required: true },
+  clientId: { type: String, required: true },
   name: { type: String, required: true },
   avatarColor: { type: String, required: true },
   isHost: { type: Boolean, required: true },

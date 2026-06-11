@@ -12,7 +12,7 @@ import { Play, Plus } from 'lucide-react';
 
 export default function Home() {
   const { socket } = useSocket();
-  const { playerName, setPlayerName } = usePlayer();
+  const { playerName, setPlayerName, clientId } = usePlayer();
   
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);
@@ -27,7 +27,8 @@ export default function Home() {
     setPlayerName(nameInput.trim());
     
     socket.emit(SocketEvents.ROOM_CREATE, {
-      playerName: nameInput.trim()
+      playerName: nameInput.trim(),
+      clientId
     });
   };
 

@@ -99,12 +99,44 @@ export function calculateRoundScores(
     });
   }
 
-  // Record every valid answer from this round so future rounds can detect repeats
-  for (const cat of CATEGORIES) {
-    for (const word of answersByCategory[cat]) {
-      usedWords[cat].add(word);
+  return results;
+}
+
+// Returns a new results array with any "playerId|category" entries in `overrides`
+// forced to an 'invalid' (0 point) status. Empty answers cannot be overridden.
+export function applyReviewOverrides(
+  results: PlayerRoundResult[],
+  overrides: Set<string>
+): PlayerRoundResult[] {
+  return results.map(result => {
+    const answerStatuses = { ...result.answerStatuses };
+    const scores = { ...result.scores };
+
+    for (const cat of CATEGORIES) {
+      const key = `${result.playerId}|${cat}`;
+      if (overrides.has(key) && answerStatuses[cat] !== 'empty') {
+        answerStatuses[cat] = 'invalid';
+        scores[cat] = POINTS_INVALID;
+      }
+    }
+
+    const roundScore = CATEGORIES.reduce((sum, cat) => sum + scores[cat], 0);
+
+    return { ...result, answerStatuses, scores, roundScore };
+  });
+}
+
+// Records every still-valid answer from the final (post-review) results so
+// future rounds can detect repeats. Answers the host marked invalid are excluded.
+export function commitUsedWords(
+  results: PlayerRoundResult[],
+  usedWords: Record<Category, Set<string>>
+): void {
+  for (const result of results) {
+    for (const cat of CATEGORIES) {
+      const status = result.answerStatuses[cat];
+      if (status === 'invalid' || status === 'empty') continue;
+      usedWords[cat].add(result.answers[cat].trim().toLowerCase());
     }
   }
-
-  return results;
 }

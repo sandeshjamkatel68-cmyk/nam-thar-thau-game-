@@ -1,17 +1,20 @@
 "use client";
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useSocket } from './SocketContext';
+import { getClientId } from '../lib/clientId';
 
 interface PlayerContextType {
   playerName: string;
   setPlayerName: (name: string) => void;
   socketId: string;
+  clientId: string;
 }
 
 const PlayerContext = createContext<PlayerContextType | undefined>(undefined);
 
 export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const [playerName, setPlayerNameState] = useState('');
+  const [clientId, setClientId] = useState('');
   const { socket } = useSocket();
 
   useEffect(() => {
@@ -19,6 +22,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     if (savedName) {
       setPlayerNameState(savedName);
     }
+    setClientId(getClientId());
   }, []);
 
   const setPlayerName = (name: string) => {
@@ -27,7 +31,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <PlayerContext.Provider value={{ playerName, setPlayerName, socketId: socket.id || '' }}>
+    <PlayerContext.Provider value={{ playerName, setPlayerName, socketId: socket.id || '', clientId }}>
       {children}
     </PlayerContext.Provider>
   );

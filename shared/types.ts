@@ -41,6 +41,7 @@ export type AnswerStatuses = Record<Category, AnswerStatus>;
 // --- Player ---
 export interface Player {
   socketId: string;
+  clientId: string; // stable identity persisted client-side, survives reconnects
   name: string;
   avatarColor: string;
   isHost: boolean;
@@ -95,7 +96,7 @@ export interface PlayerRoundResult {
 }
 
 // --- Round ---
-export type RoundPhase = 'picking-letter' | 'playing' | 'stopped' | 'results';
+export type RoundPhase = 'picking-letter' | 'playing' | 'stopped' | 'reviewing' | 'results';
 
 export interface RoundState {
   roundNumber: number;
@@ -162,6 +163,7 @@ export enum SocketEvents {
   // Room events (Client → Server)
   ROOM_CREATE = 'room:create',
   ROOM_JOIN = 'room:join',
+  ROOM_REJOIN = 'room:rejoin',
   ROOM_LEAVE = 'room:leave',
   ROOM_KICK = 'room:kick',
   ROOM_UPDATE_SETTINGS = 'room:update-settings',
@@ -169,9 +171,13 @@ export enum SocketEvents {
   // Room events (Server → Client)
   ROOM_CREATED = 'room:created',
   ROOM_JOINED = 'room:joined',
+  ROOM_REJOIN_SUCCESS = 'room:rejoin-success',
+  ROOM_REJOIN_FAILED = 'room:rejoin-failed',
   ROOM_PLAYER_JOINED = 'room:player-joined',
   ROOM_PLAYER_LEFT = 'room:player-left',
   ROOM_PLAYER_KICKED = 'room:player-kicked',
+  ROOM_PLAYER_RECONNECTED = 'room:player-reconnected',
+  ROOM_PLAYER_DISCONNECTED = 'room:player-disconnected',
   ROOM_SETTINGS_UPDATED = 'room:settings-updated',
   ROOM_HOST_CHANGED = 'room:host-changed',
   ROOM_ERROR = 'room:error',
@@ -182,6 +188,8 @@ export enum SocketEvents {
   GAME_UPDATE_ANSWER = 'game:update-answer',
   GAME_STOP = 'game:stop',
   GAME_NEXT_ROUND = 'game:next-round',
+  GAME_REVIEW_TOGGLE = 'game:review-toggle',
+  GAME_REVIEW_CONFIRM = 'game:review-confirm',
 
   // Game events (Server → Client)
   GAME_STARTED = 'game:started',
@@ -191,6 +199,8 @@ export enum SocketEvents {
   GAME_TIMER_TICK = 'game:timer-tick',
   GAME_TIMER_EXPIRED = 'game:timer-expired',
   GAME_STOPPED = 'game:stopped',
+  GAME_REVIEW_START = 'game:review-start',
+  GAME_REVIEW_UPDATE = 'game:review-update',
   GAME_ROUND_RESULTS = 'game:round-results',
   GAME_FINISHED = 'game:finished',
   GAME_PLAYER_PROGRESS = 'game:player-progress',
@@ -208,11 +218,19 @@ export enum SocketEvents {
 // --- Room Payloads ---
 export interface CreateRoomPayload {
   playerName: string;
+  clientId: string;
 }
 
 export interface JoinRoomPayload {
   roomCode: string;
   playerName: string;
+  clientId: string;
+}
+
+export interface RejoinRoomPayload {
+  roomCode: string;
+  playerName: string;
+  clientId: string;
 }
 
 export interface KickPlayerPayload {
@@ -245,6 +263,16 @@ export interface NextRoundPayload {
   roomCode: string;
 }
 
+export interface ReviewTogglePayload {
+  roomCode: string;
+  playerId: string;
+  category: Category;
+}
+
+export interface ReviewConfirmPayload {
+  roomCode: string;
+}
+
 // --- Response Payloads ---
 export interface RoomCreatedPayload {
   roomCode: string;
@@ -253,6 +281,25 @@ export interface RoomCreatedPayload {
 
 export interface RoomJoinedPayload {
   room: Room;
+}
+
+export interface RoomRejoinSuccessPayload {
+  room: Room;
+  roundState: RoundState | null;
+  leaderboard: LeaderboardEntry[];
+  chatMessages: ChatMessage[];
+  reviewOverrides: ReviewOverrideKey[];
+  letterOptions: string[];
+}
+
+export interface PlayerReconnectedPayload {
+  oldPlayerId: string;
+  newPlayerId: string;
+  room: Room;
+}
+
+export interface PlayerDisconnectedPayload {
+  playerId: string;
 }
 
 export interface RoundStartPayload {
@@ -276,6 +323,20 @@ export interface RoundResultsPayload {
   results: PlayerRoundResult[];
   leaderboard: LeaderboardEntry[];
   roundNumber: number;
+}
+
+// "playerId|category" keys that the host has marked as invalid during review
+export type ReviewOverrideKey = string;
+
+export interface ReviewStartPayload {
+  results: PlayerRoundResult[];
+  overrides: ReviewOverrideKey[];
+  roundNumber: number;
+}
+
+export interface ReviewUpdatePayload {
+  results: PlayerRoundResult[];
+  overrides: ReviewOverrideKey[];
 }
 
 export interface GameFinishedPayload {

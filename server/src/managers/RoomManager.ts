@@ -1,19 +1,25 @@
-import { Room as RoomType, Player, RoomSettings, DEFAULT_SETTINGS, AVATAR_COLORS } from 'shared/types.js';
+import { Room as RoomType, Player, RoomSettings, DEFAULT_SETTINGS, AVATAR_COLORS, ChatMessage } from 'shared/types.js';
 import { generateUniqueRoomCode } from '../utils/roomCode.js';
 import { Room } from '../models/Room.js';
 
+const RECONNECT_GRACE_MS = 30_000;
+const CHAT_HISTORY_LIMIT = 50;
+
 class RoomManager {
   private activeRooms: Map<string, RoomType> = new Map();
+  private chatHistory: Map<string, ChatMessage[]> = new Map();
+  private removalTimers: Map<string, NodeJS.Timeout> = new Map();
 
   private getRandomColor(): string {
     return AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)];
   }
 
-  async createRoom(playerName: string, socketId: string): Promise<RoomType> {
+  async createRoom(playerName: string, socketId: string, clientId: string): Promise<RoomType> {
     const roomCode = await generateUniqueRoomCode();
-    
+
     const hostPlayer: Player = {
       socketId,
+      clientId,
       name: playerName,
       avatarColor: this.getRandomColor(),
       isHost: true,
@@ -39,7 +45,7 @@ class RoomManager {
     return room;
   }
 
-  async joinRoom(roomCode: string, playerName: string, socketId: string): Promise<{ room: RoomType, newPlayer: Player }> {
+  async joinRoom(roomCode: string, playerName: string, socketId: string, clientId: string): Promise<{ room: RoomType, newPlayer: Player }> {
     const room = this.activeRooms.get(roomCode);
     if (!room) {
       throw new Error('Room not found');
@@ -55,6 +61,7 @@ class RoomManager {
 
     const newPlayer: Player = {
       socketId,
+      clientId,
       name: playerName,
       avatarColor: this.getRandomColor(),
       isHost: false,
@@ -102,6 +109,71 @@ class RoomManager {
     Room.updateOne({ roomCode }, { players: room.players, hostPlayerId: room.hostPlayerId }).exec().catch(console.error);
 
     return { room, hostChanged, newHostId, isEmptied: false };
+  }
+
+  rejoinRoom(roomCode: string, clientId: string, newSocketId: string, playerName: string): { room: RoomType, oldSocketId: string } {
+    const room = this.activeRooms.get(roomCode);
+    if (!room) throw new Error('Room not found');
+
+    const player = room.players.find(p => p.clientId === clientId);
+    if (!player) throw new Error('Player not found in room');
+
+    const oldSocketId = player.socketId;
+    player.socketId = newSocketId;
+    player.isConnected = true;
+    if (playerName) player.name = playerName;
+
+    if (room.hostPlayerId === oldSocketId) {
+      room.hostPlayerId = newSocketId;
+    }
+
+    this.cancelRemoval(roomCode, oldSocketId);
+
+    // Update DB async
+    Room.updateOne({ roomCode }, { players: room.players, hostPlayerId: room.hostPlayerId }).exec().catch(console.error);
+
+    return { room, oldSocketId };
+  }
+
+  markDisconnected(socketId: string): { roomCode: string; room: RoomType } | null {
+    for (const [roomCode, room] of this.activeRooms.entries()) {
+      const player = room.players.find(p => p.socketId === socketId);
+      if (player) {
+        player.isConnected = false;
+        Room.updateOne({ roomCode }, { players: room.players }).exec().catch(console.error);
+        return { roomCode, room };
+      }
+    }
+    return null;
+  }
+
+  scheduleRemoval(roomCode: string, socketId: string, onExpire: () => void) {
+    this.cancelRemoval(roomCode, socketId);
+    const timer = setTimeout(() => {
+      this.removalTimers.delete(`${roomCode}:${socketId}`);
+      onExpire();
+    }, RECONNECT_GRACE_MS);
+    this.removalTimers.set(`${roomCode}:${socketId}`, timer);
+  }
+
+  cancelRemoval(roomCode: string, socketId: string) {
+    const key = `${roomCode}:${socketId}`;
+    const timer = this.removalTimers.get(key);
+    if (timer) {
+      clearTimeout(timer);
+      this.removalTimers.delete(key);
+    }
+  }
+
+  addChatMessage(roomCode: string, message: ChatMessage) {
+    const history = this.chatHistory.get(roomCode) || [];
+    history.push(message);
+    if (history.length > CHAT_HISTORY_LIMIT) history.shift();
+    this.chatHistory.set(roomCode, history);
+  }
+
+  getChatHistory(roomCode: string): ChatMessage[] {
+    return this.chatHistory.get(roomCode) || [];
   }
 
   kickPlayer(roomCode: string, targetId: string, requesterId: string): RoomType {
@@ -159,15 +231,8 @@ class RoomManager {
     }
   }
   
-  handleDisconnect(socketId: string): { roomCode: string; room: RoomType | undefined; hostChanged: boolean; newHostId?: string; isEmptied: boolean } | null {
-    // Find room containing this socket
-    for (const [roomCode, room] of this.activeRooms.entries()) {
-      if (room.players.some(p => p.socketId === socketId)) {
-        const res = this.leaveRoom(roomCode, socketId);
-        return { roomCode, ...res };
-      }
-    }
-    return null;
+  cleanupRoom(roomCode: string) {
+    this.chatHistory.delete(roomCode);
   }
 }
 

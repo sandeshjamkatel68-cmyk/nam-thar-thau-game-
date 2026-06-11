@@ -1,14 +1,17 @@
 import { Server, Socket } from 'socket.io';
-import { 
-  SocketEvents, 
-  CreateRoomPayload, 
-  JoinRoomPayload, 
-  KickPlayerPayload, 
-  UpdateSettingsPayload, 
-  PickLetterPayload, 
-  UpdateAnswerPayload, 
-  StopGamePayload, 
+import {
+  SocketEvents,
+  CreateRoomPayload,
+  JoinRoomPayload,
+  RejoinRoomPayload,
+  KickPlayerPayload,
+  UpdateSettingsPayload,
+  PickLetterPayload,
+  UpdateAnswerPayload,
+  StopGamePayload,
   NextRoundPayload,
+  ReviewTogglePayload,
+  ReviewConfirmPayload,
   ChatSendPayload,
   ChatMessage
 } from 'shared/types.js';
@@ -28,7 +31,7 @@ export function registerSocketHandlers(io: Server) {
 
     socket.on(SocketEvents.ROOM_CREATE, async (payload: CreateRoomPayload) => {
       try {
-        const room = await roomManager.createRoom(payload.playerName, socket.id);
+        const room = await roomManager.createRoom(payload.playerName, socket.id, payload.clientId);
         socket.join(room.roomCode);
         socket.emit(SocketEvents.ROOM_CREATED, { roomCode: room.roomCode, room });
       } catch (error: any) {
@@ -38,16 +41,50 @@ export function registerSocketHandlers(io: Server) {
 
     socket.on(SocketEvents.ROOM_JOIN, async (payload: JoinRoomPayload) => {
       try {
-        const { room, newPlayer } = await roomManager.joinRoom(payload.roomCode, payload.playerName, socket.id);
+        const { room, newPlayer } = await roomManager.joinRoom(payload.roomCode, payload.playerName, socket.id, payload.clientId);
         socket.join(payload.roomCode);
-        
+
         // Notify others
         socket.to(payload.roomCode).emit(SocketEvents.ROOM_PLAYER_JOINED, newPlayer);
-        
+
         // Send current state to new player
         socket.emit(SocketEvents.ROOM_JOINED, { room });
       } catch (error: any) {
         socket.emit(SocketEvents.ROOM_ERROR, { message: error.message });
+      }
+    });
+
+    socket.on(SocketEvents.ROOM_REJOIN, (payload: RejoinRoomPayload) => {
+      try {
+        const { room, oldSocketId } = roomManager.rejoinRoom(payload.roomCode, payload.clientId, socket.id, payload.playerName);
+        socket.join(payload.roomCode);
+
+        gameManager.remapPlayerId(payload.roomCode, oldSocketId, socket.id);
+
+        const roundState = gameManager.getRoundState(payload.roomCode) || null;
+        const leaderboard = gameManager.getLeaderboard(payload.roomCode) || [];
+        const chatMessages = roomManager.getChatHistory(payload.roomCode);
+        const reviewOverrides = roundState?.phase === 'reviewing'
+          ? gameManager.getReviewOverrides(payload.roomCode)
+          : [];
+        const letterOptions = getAllLetters();
+
+        socket.emit(SocketEvents.ROOM_REJOIN_SUCCESS, {
+          room,
+          roundState,
+          leaderboard,
+          chatMessages,
+          reviewOverrides,
+          letterOptions
+        });
+
+        socket.to(payload.roomCode).emit(SocketEvents.ROOM_PLAYER_RECONNECTED, {
+          oldPlayerId: oldSocketId,
+          newPlayerId: socket.id,
+          room
+        });
+      } catch (error: any) {
+        socket.emit(SocketEvents.ROOM_REJOIN_FAILED, { message: error.message });
       }
     });
 
@@ -58,6 +95,7 @@ export function registerSocketHandlers(io: Server) {
 
         if (isEmptied) {
           gameManager.cleanupRoom(payload.roomCode);
+          roomManager.cleanupRoom(payload.roomCode);
           return;
         }
 
@@ -212,21 +250,44 @@ export function registerSocketHandlers(io: Server) {
       }
     });
 
+    socket.on(SocketEvents.GAME_REVIEW_TOGGLE, (payload: ReviewTogglePayload) => {
+      try {
+        const { results, overrides } = gameManager.toggleReview(payload.roomCode, payload.playerId, payload.category, socket.id);
+        io.to(payload.roomCode).emit(SocketEvents.GAME_REVIEW_UPDATE, { results, overrides });
+      } catch (error: any) {
+        socket.emit(SocketEvents.GAME_ERROR, { message: error.message });
+      }
+    });
+
+    socket.on(SocketEvents.GAME_REVIEW_CONFIRM, async (payload: ReviewConfirmPayload) => {
+      try {
+        const roundState = gameManager.getRoundState(payload.roomCode);
+        const { results, leaderboard } = await gameManager.confirmReview(payload.roomCode, socket.id);
+        io.to(payload.roomCode).emit(SocketEvents.GAME_ROUND_RESULTS, {
+          results,
+          leaderboard,
+          roundNumber: roundState?.roundNumber || 0
+        });
+      } catch (error: any) {
+        socket.emit(SocketEvents.GAME_ERROR, { message: error.message });
+      }
+    });
+
     // Helper for round stop
     const handleRoundStop = async (roomCode: string, stoppedById: string | null, stoppedByName: string = 'Timer') => {
-      const roundState = gameManager.stopRound(roomCode, stoppedById);
-      
-      io.to(roomCode).emit(SocketEvents.GAME_STOPPED, { 
+      gameManager.stopRound(roomCode, stoppedById);
+
+      io.to(roomCode).emit(SocketEvents.GAME_STOPPED, {
         stoppedBy: stoppedById,
         stoppedByName
       });
 
-      // Give a small delay before showing results for dramatic effect
-      setTimeout(async () => {
-        const { results, leaderboard } = await gameManager.calculateResults(roomCode);
-        io.to(roomCode).emit(SocketEvents.GAME_ROUND_RESULTS, {
+      // Give a small delay before showing the review screen for dramatic effect
+      setTimeout(() => {
+        const { results, overrides, roundState } = gameManager.prepareReview(roomCode);
+        io.to(roomCode).emit(SocketEvents.GAME_REVIEW_START, {
           results,
-          leaderboard,
+          overrides,
           roundNumber: roundState.roundNumber
         });
       }, 2000);
@@ -253,6 +314,7 @@ export function registerSocketHandlers(io: Server) {
           timestamp: Date.now()
         };
 
+        roomManager.addChatMessage(payload.roomCode, chatMessage);
         io.to(payload.roomCode).emit(SocketEvents.CHAT_MESSAGE, chatMessage);
 
       } catch (error) {
@@ -266,18 +328,26 @@ export function registerSocketHandlers(io: Server) {
 
     socket.on('disconnect', () => {
       console.log(`Disconnected: ${socket.id}`);
-      const res = roomManager.handleDisconnect(socket.id);
-      
-      if (res) {
-        if (res.isEmptied) {
-          gameManager.cleanupRoom(res.roomCode);
+      const res = roomManager.markDisconnected(socket.id);
+      if (!res) return;
+
+      const { roomCode } = res;
+      io.to(roomCode).emit(SocketEvents.ROOM_PLAYER_DISCONNECTED, { playerId: socket.id });
+
+      // Give the player a grace period to reconnect (e.g. page refresh) before
+      // actually removing them from the room.
+      roomManager.scheduleRemoval(roomCode, socket.id, () => {
+        const leaveRes = roomManager.leaveRoom(roomCode, socket.id);
+        if (leaveRes.isEmptied) {
+          gameManager.cleanupRoom(roomCode);
+          roomManager.cleanupRoom(roomCode);
         } else {
-          io.to(res.roomCode).emit(SocketEvents.ROOM_PLAYER_LEFT, { playerId: socket.id });
-          if (res.hostChanged && res.newHostId) {
-            io.to(res.roomCode).emit(SocketEvents.ROOM_HOST_CHANGED, { newHostId: res.newHostId });
+          io.to(roomCode).emit(SocketEvents.ROOM_PLAYER_LEFT, { playerId: socket.id });
+          if (leaveRes.hostChanged && leaveRes.newHostId) {
+            io.to(roomCode).emit(SocketEvents.ROOM_HOST_CHANGED, { newHostId: leaveRes.newHostId });
           }
         }
-      }
+      });
     });
   });
 }

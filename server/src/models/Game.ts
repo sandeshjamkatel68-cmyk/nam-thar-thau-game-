@@ -64,7 +64,7 @@ const GameSchema = new Schema<GameDocument>(
     submissions: { type: [SubmissionSchema], default: [] },
     results: { type: [PlayerRoundResultSchema], default: [] },
     stoppedBy: { type: String, default: null },
-    phase: { type: String, enum: ['picking-letter', 'playing', 'stopped', 'results'], required: true },
+    phase: { type: String, enum: ['picking-letter', 'playing', 'stopped', 'reviewing', 'results'], required: true },
     createdAt: { type: Number, default: () => Date.now() },
   },
   { timestamps: true }

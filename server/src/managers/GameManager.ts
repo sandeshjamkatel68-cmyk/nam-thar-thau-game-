@@ -1,6 +1,6 @@
 import { Room as RoomType, RoundState, LeaderboardEntry, Submission, Category, PlayerRoundResult } from 'shared/types.js';
 import { Game } from '../models/Game.js';
-import { calculateRoundScores } from '../utils/scoring.js';
+import { calculateRoundScores, applyReviewOverrides, commitUsedWords } from '../utils/scoring.js';
 import { roomManager } from './RoomManager.js';
 import { timerManager } from './TimerManager.js';
 
@@ -18,6 +18,8 @@ class GameManager {
   private activeRounds: Map<string, RoundState> = new Map();
   private leaderboards: Map<string, LeaderboardEntry[]> = new Map();
   private usedWords: Map<string, Record<Category, Set<string>>> = new Map();
+  private draftResults: Map<string, PlayerRoundResult[]> = new Map();
+  private reviewOverrides: Map<string, Set<string>> = new Map();
 
   startGame(roomCode: string): RoundState {
     const room = roomManager.getRoom(roomCode);
@@ -137,18 +139,79 @@ class GameManager {
     return roundState;
   }
 
-  async calculateResults(roomCode: string): Promise<{ results: PlayerRoundResult[], leaderboard: LeaderboardEntry[], roundState: RoundState }> {
+  prepareReview(roomCode: string): { results: PlayerRoundResult[], overrides: string[], roundState: RoundState } {
     const roundState = this.activeRounds.get(roomCode);
     const room = roomManager.getRoom(roomCode);
-    
+
     if (!roundState || !room) throw new Error('Round or Room not found');
 
-    roundState.phase = 'results';
+    roundState.phase = 'reviewing';
 
-    // Calculate scores (also records this round's words to detect repeats in future rounds)
     const usedWords = this.usedWords.get(roomCode) || createEmptyUsedWords();
-    const results = calculateRoundScores(roundState.submissions, roundState.letter, room.players, usedWords);
+    const draftResults = calculateRoundScores(roundState.submissions, roundState.letter, room.players, usedWords);
+
+    this.draftResults.set(roomCode, draftResults);
+    this.reviewOverrides.set(roomCode, new Set());
+
+    const results = applyReviewOverrides(draftResults, new Set());
     roundState.results = results;
+
+    return { results, overrides: [], roundState };
+  }
+
+  toggleReview(roomCode: string, playerId: string, category: Category, requesterId: string): { results: PlayerRoundResult[], overrides: string[] } {
+    const room = roomManager.getRoom(roomCode);
+    if (!room) throw new Error('Room not found');
+    if (room.hostPlayerId !== requesterId) throw new Error('Only the host can review answers');
+
+    const roundState = this.activeRounds.get(roomCode);
+    if (!roundState || roundState.phase !== 'reviewing') throw new Error('Not currently reviewing this round');
+
+    const draftResults = this.draftResults.get(roomCode);
+    if (!draftResults) throw new Error('No draft results to review');
+
+    const draft = draftResults.find(r => r.playerId === playerId);
+    if (!draft || draft.answerStatuses[category] === 'empty') {
+      throw new Error('Cannot mark an empty answer as invalid');
+    }
+
+    const overrides = this.reviewOverrides.get(roomCode) || new Set<string>();
+    const key = `${playerId}|${category}`;
+    if (overrides.has(key)) {
+      overrides.delete(key);
+    } else {
+      overrides.add(key);
+    }
+    this.reviewOverrides.set(roomCode, overrides);
+
+    const results = applyReviewOverrides(draftResults, overrides);
+    roundState.results = results;
+
+    return { results, overrides: Array.from(overrides) };
+  }
+
+  async confirmReview(roomCode: string, requesterId: string): Promise<{ results: PlayerRoundResult[], leaderboard: LeaderboardEntry[], roundState: RoundState }> {
+    const roundState = this.activeRounds.get(roomCode);
+    const room = roomManager.getRoom(roomCode);
+
+    if (!roundState || !room) throw new Error('Round or Room not found');
+    if (room.hostPlayerId !== requesterId) throw new Error('Only the host can confirm results');
+
+    const draftResults = this.draftResults.get(roomCode);
+    if (!draftResults) throw new Error('No draft results to confirm');
+
+    const overrides = this.reviewOverrides.get(roomCode) || new Set<string>();
+    const results = applyReviewOverrides(draftResults, overrides);
+
+    roundState.phase = 'results';
+    roundState.results = results;
+
+    // Record this round's still-valid words so future rounds can detect repeats
+    const usedWords = this.usedWords.get(roomCode) || createEmptyUsedWords();
+    commitUsedWords(results, usedWords);
+
+    this.draftResults.delete(roomCode);
+    this.reviewOverrides.delete(roomCode);
 
     // Determine round winner
     let maxRoundScore = -1;
@@ -253,11 +316,60 @@ class GameManager {
   getLeaderboard(roomCode: string): LeaderboardEntry[] | undefined {
     return this.leaderboards.get(roomCode);
   }
+
+  getReviewOverrides(roomCode: string): string[] {
+    return Array.from(this.reviewOverrides.get(roomCode) || []);
+  }
   
+  // Re-points all in-memory references from a player's old socket id to their new
+  // one after a reconnect, so submissions/results/leaderboard stay attached to them.
+  remapPlayerId(roomCode: string, oldId: string, newId: string) {
+    if (oldId === newId) return;
+
+    const roundState = this.activeRounds.get(roomCode);
+    if (roundState) {
+      if (roundState.letterPickerId === oldId) roundState.letterPickerId = newId;
+      if (roundState.stoppedBy === oldId) roundState.stoppedBy = newId;
+      for (const sub of roundState.submissions) {
+        if (sub.playerId === oldId) sub.playerId = newId;
+      }
+      for (const result of roundState.results) {
+        if (result.playerId === oldId) result.playerId = newId;
+      }
+    }
+
+    const leaderboard = this.leaderboards.get(roomCode);
+    if (leaderboard) {
+      for (const entry of leaderboard) {
+        if (entry.playerId === oldId) entry.playerId = newId;
+      }
+    }
+
+    const draftResults = this.draftResults.get(roomCode);
+    if (draftResults) {
+      for (const result of draftResults) {
+        if (result.playerId === oldId) result.playerId = newId;
+      }
+    }
+
+    const overrides = this.reviewOverrides.get(roomCode);
+    if (overrides) {
+      for (const key of Array.from(overrides)) {
+        const [playerId, category] = key.split('|');
+        if (playerId === oldId) {
+          overrides.delete(key);
+          overrides.add(`${newId}|${category}`);
+        }
+      }
+    }
+  }
+
   cleanupRoom(roomCode: string) {
     this.activeRounds.delete(roomCode);
     this.leaderboards.delete(roomCode);
     this.usedWords.delete(roomCode);
+    this.draftResults.delete(roomCode);
+    this.reviewOverrides.delete(roomCode);
   }
 }
 

@@ -12,6 +12,7 @@ import { Card } from '../../../components/ui/Card';
 import { Header } from '../../../components/layout/Header';
 import { Play, Loader2, LogOut } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { clearRoomSession } from '../../../lib/session';
 
 export default function LobbyPage() {
   const { room, error } = useGame();
@@ -47,6 +48,7 @@ export default function LobbyPage() {
 
   const handleLeave = () => {
     socket.emit(SocketEvents.ROOM_LEAVE, { roomCode: room.roomCode });
+    clearRoomSession();
     router.push('/');
   };
 

@@ -1,14 +1,18 @@
 import React from 'react';
-import { PlayerRoundResult, CATEGORIES, CATEGORY_ICONS } from 'shared/types';
+import { PlayerRoundResult, Category, CATEGORIES, CATEGORY_ICONS } from 'shared/types';
 import { Avatar } from '../ui/Avatar';
 import { cn } from '../../lib/utils';
+import { Ban } from 'lucide-react';
 
 interface RoundResultsProps {
   results: PlayerRoundResult[];
+  interactive?: boolean;
+  overrides?: string[];
+  onToggle?: (playerId: string, category: Category) => void;
 }
 
-export const RoundResults: React.FC<RoundResultsProps> = ({ results }) => {
-  
+export const RoundResults: React.FC<RoundResultsProps> = ({ results, interactive, overrides = [], onToggle }) => {
+
   const sortedResults = [...results].sort((a, b) => b.roundScore - a.roundScore);
 
   const getStatusColor = (status: string) => {
@@ -44,20 +48,36 @@ export const RoundResults: React.FC<RoundResultsProps> = ({ results }) => {
                 <span className="font-medium text-white">{result.playerName}</span>
               </td>
               
-              {CATEGORIES.map(cat => (
-                <td key={cat} className="p-2 text-center">
-                  <div className={cn(
-                    "px-3 py-2 rounded-lg text-sm border font-medium mx-auto max-w-[120px] truncate",
-                    getStatusColor(result.answerStatuses[cat])
-                  )} title={
-                    result.answerStatuses[cat] === 'repeated'
-                      ? `${result.answers[cat]} (already used in an earlier round)`
-                      : result.answers[cat] || '-'
-                  }>
-                    {result.answers[cat] || '-'}
-                  </div>
-                </td>
-              ))}
+              {CATEGORIES.map(cat => {
+                const isOverridden = overrides.includes(`${result.playerId}|${cat}`);
+                const isClickable = interactive && result.answerStatuses[cat] !== 'empty';
+
+                return (
+                  <td key={cat} className="p-2 text-center">
+                    <div
+                      onClick={isClickable ? () => onToggle?.(result.playerId, cat) : undefined}
+                      className={cn(
+                        "relative px-3 py-2 rounded-lg text-sm border font-medium mx-auto max-w-[120px] truncate",
+                        getStatusColor(result.answerStatuses[cat]),
+                        isOverridden && "ring-2 ring-danger border-danger",
+                        isClickable && "cursor-pointer hover:brightness-125 transition-all"
+                      )}
+                      title={
+                        isOverridden
+                          ? `${result.answers[cat]} (marked invalid by host)`
+                          : result.answerStatuses[cat] === 'repeated'
+                          ? `${result.answers[cat]} (already used in an earlier round)`
+                          : result.answers[cat] || '-'
+                      }
+                    >
+                      {isOverridden && (
+                        <Ban className="w-3.5 h-3.5 text-danger absolute -top-1.5 -right-1.5 bg-surface rounded-full" />
+                      )}
+                      {result.answers[cat] || '-'}
+                    </div>
+                  </td>
+                );
+              })}
               
               <td className="p-4 text-right">
                 <span className="font-heading font-bold text-xl text-accent">

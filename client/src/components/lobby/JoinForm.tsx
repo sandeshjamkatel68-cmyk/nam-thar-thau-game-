@@ -8,7 +8,7 @@ import { Button } from '../ui/Button';
 
 export const JoinForm: React.FC = () => {
   const { socket } = useSocket();
-  const { playerName, setPlayerName } = usePlayer();
+  const { playerName, setPlayerName, clientId } = usePlayer();
   
   const [code, setCode] = useState('');
   const [name, setName] = useState(playerName);
@@ -23,7 +23,8 @@ export const JoinForm: React.FC = () => {
     
     socket.emit(SocketEvents.ROOM_JOIN, {
       roomCode: code.toUpperCase(),
-      playerName: name.trim()
+      playerName: name.trim(),
+      clientId
     });
 
     // Reset loading state after a timeout in case of error (error handled by context)

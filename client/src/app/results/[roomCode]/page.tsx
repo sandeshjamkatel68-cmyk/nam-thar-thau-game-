@@ -4,18 +4,19 @@ import { useGame } from '../../../hooks/useGame';
 import { usePlayer } from '../../../context/PlayerContext';
 import { useSocket } from '../../../hooks/useSocket';
 import { useSound } from '../../../hooks/useSound';
-import { SocketEvents } from 'shared/types';
+import { Category, SocketEvents } from 'shared/types';
 import { Header } from '../../../components/layout/Header';
 import { RoundResults } from '../../../components/game/RoundResults';
 import { Button } from '../../../components/ui/Button';
 import { Avatar } from '../../../components/ui/Avatar';
 import { Badge } from '../../../components/ui/Badge';
-import { Trophy, Crown, ArrowRight, Play, Loader2, Home } from 'lucide-react';
+import { Trophy, Crown, ArrowRight, Play, Loader2, Home, ShieldCheck } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { cn } from '../../../lib/utils';
+import { clearRoomSession } from '../../../lib/session';
 
 export default function ResultsPage() {
-  const { room, roundState, leaderboard, finalResults } = useGame();
+  const { room, roundState, leaderboard, finalResults, reviewOverrides } = useGame();
   const { socketId } = usePlayer();
   const { socket } = useSocket();
   const { playSound } = useSound();
@@ -48,15 +49,27 @@ export default function ResultsPage() {
   }
 
   const isHost = room.hostPlayerId === socketId;
+  const isReviewing = roundState?.phase === 'reviewing';
   const currentLeaderboard = isFinal ? finalResults?.finalLeaderboard || leaderboard : leaderboard;
-  
+
   const handleNextRound = () => {
     if (!isHost) return;
     socket.emit(SocketEvents.GAME_NEXT_ROUND, { roomCode: room.roomCode });
   };
 
+  const handleToggleReview = (playerId: string, category: Category) => {
+    if (!isHost || !isReviewing) return;
+    socket.emit(SocketEvents.GAME_REVIEW_TOGGLE, { roomCode: room.roomCode, playerId, category });
+  };
+
+  const handleConfirmReview = () => {
+    if (!isHost) return;
+    socket.emit(SocketEvents.GAME_REVIEW_CONFIRM, { roomCode: room.roomCode });
+  };
+
   const handleGoHome = () => {
     socket.emit(SocketEvents.ROOM_LEAVE, { roomCode: room.roomCode });
+    clearRoomSession();
     router.push('/');
   };
 
@@ -91,19 +104,26 @@ export default function ResultsPage() {
             <div className="flex items-center justify-between">
               <div>
                 <h1 className="text-3xl font-heading font-bold text-white flex items-center gap-3">
-                  Round {roundState.roundNumber} Results
+                  Round {roundState.roundNumber} {isReviewing ? 'Review' : 'Results'}
                   <span className="text-xl px-3 py-1 bg-surface-light rounded-lg border border-white/10 text-primary uppercase font-black">
                     Letter: {roundState.letter}
                   </span>
                 </h1>
                 <p className="text-text-secondary mt-1">
-                  Stopped by: {(roundState as any).stoppedByName || 'Timer'}
+                  {isReviewing
+                    ? (isHost ? 'Tap any answer to mark it invalid before scores are finalized' : 'Host is verifying answers...')
+                    : `Stopped by: ${(roundState as any).stoppedByName || 'Timer'}`}
                 </p>
               </div>
             </div>
-            
+
             <div className="bg-surface border border-white/5 rounded-2xl shadow-xl overflow-hidden">
-              <RoundResults results={roundState.results} />
+              <RoundResults
+                results={roundState.results}
+                interactive={isHost && isReviewing}
+                overrides={reviewOverrides}
+                onToggle={handleToggleReview}
+              />
             </div>
           </div>
         )}
@@ -178,6 +198,18 @@ export default function ResultsPage() {
                 <Home className="w-5 h-5 mr-2" />
                 Back to Home
               </Button>
+            ) : isReviewing ? (
+              isHost ? (
+                <Button size="lg" className="w-full" onClick={handleConfirmReview}>
+                  <ShieldCheck className="w-5 h-5 mr-2" />
+                  Confirm Results
+                </Button>
+              ) : (
+                <div className="text-center p-4 bg-surface-light rounded-xl border border-white/5">
+                  <Loader2 className="w-6 h-6 animate-spin text-primary mx-auto mb-2" />
+                  <p className="text-sm font-medium text-text-secondary">Waiting for host to verify answers...</p>
+                </div>
+              )
             ) : isHost ? (
               <Button size="lg" className="w-full" onClick={handleNextRound}>
                 {roundState?.roundNumber === room.settings.maxRounds ? "Finish Game" : "Next Round"}
