@@ -167,6 +167,7 @@ export enum SocketEvents {
   ROOM_LEAVE = 'room:leave',
   ROOM_KICK = 'room:kick',
   ROOM_UPDATE_SETTINGS = 'room:update-settings',
+  ROOM_PLAY_AGAIN = 'room:play-again',
 
   // Room events (Server → Client)
   ROOM_CREATED = 'room:created',
@@ -180,6 +181,7 @@ export enum SocketEvents {
   ROOM_PLAYER_DISCONNECTED = 'room:player-disconnected',
   ROOM_SETTINGS_UPDATED = 'room:settings-updated',
   ROOM_HOST_CHANGED = 'room:host-changed',
+  ROOM_PLAY_AGAIN_SUCCESS = 'room:play-again-success',
   ROOM_ERROR = 'room:error',
 
   // Game events (Client → Server)
@@ -241,6 +243,10 @@ export interface KickPlayerPayload {
 export interface UpdateSettingsPayload {
   roomCode: string;
   settings: Partial<RoomSettings>;
+}
+
+export interface PlayAgainPayload {
+  roomCode: string;
 }
 
 // --- Game Payloads ---

@@ -377,6 +377,11 @@ class GameManager {
     }
   }
 
+  resetGame(roomCode: string) {
+    this.cleanupRoom(roomCode);
+    Game.deleteMany({ roomCode }).exec().catch(console.error);
+  }
+
   cleanupRoom(roomCode: string) {
     this.activeRounds.delete(roomCode);
     this.leaderboards.delete(roomCode);

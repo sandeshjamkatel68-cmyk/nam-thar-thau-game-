@@ -137,6 +137,21 @@ export function registerSocketHandlers(io: Server) {
       }
     });
 
+    socket.on(SocketEvents.ROOM_PLAY_AGAIN, (payload: { roomCode: string }) => {
+      try {
+        const room = roomManager.getRoom(payload.roomCode);
+        if (!room) throw new Error('Room not found');
+        if (room.hostPlayerId !== socket.id) throw new Error('Only the host can restart the game');
+
+        gameManager.resetGame(payload.roomCode);
+        roomManager.resetRoomForPlayAgain(payload.roomCode);
+
+        io.to(payload.roomCode).emit(SocketEvents.ROOM_PLAY_AGAIN_SUCCESS, { room });
+      } catch (error: any) {
+        socket.emit(SocketEvents.ROOM_ERROR, { message: error.message });
+      }
+    });
+
     // ============================================
     // GAME EVENTS
     // ============================================

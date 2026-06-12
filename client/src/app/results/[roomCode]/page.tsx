@@ -10,7 +10,7 @@ import { RoundResults } from '../../../components/game/RoundResults';
 import { Button } from '../../../components/ui/Button';
 import { Avatar } from '../../../components/ui/Avatar';
 import { Badge } from '../../../components/ui/Badge';
-import { Trophy, Crown, ArrowRight, Play, Loader2, Home, ShieldCheck } from 'lucide-react';
+import { Trophy, Crown, ArrowRight, Play, Loader2, Home, ShieldCheck, RotateCcw } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { cn } from '../../../lib/utils';
 import { clearRoomSession } from '../../../lib/session';
@@ -198,10 +198,24 @@ export default function ResultsPage() {
           {/* Action Buttons */}
           <div className="bg-surface border border-white/5 rounded-2xl p-6 shadow-xl">
             {isFinal ? (
-              <Button size="lg" className="w-full" onClick={handleGoHome}>
-                <Home className="w-5 h-5 mr-2" />
-                Back to Home
-              </Button>
+              <div className="flex flex-col gap-3">
+                {isHost && (
+                  <Button size="lg" className="w-full bg-primary hover:bg-primary/90" onClick={() => socket?.emit(SocketEvents.ROOM_PLAY_AGAIN, { roomCode: room.roomCode })}>
+                    <RotateCcw className="w-5 h-5 mr-2" />
+                    Play Again with Same Players
+                  </Button>
+                )}
+                {!isHost && (
+                  <div className="text-center p-4 bg-surface-light rounded-xl border border-white/5 mb-2">
+                    <Loader2 className="w-6 h-6 animate-spin text-primary mx-auto mb-2" />
+                    <p className="text-sm font-medium text-text-secondary">Waiting for host to play again...</p>
+                  </div>
+                )}
+                <Button size="lg" variant="outline" className="w-full" onClick={handleGoHome}>
+                  <Home className="w-5 h-5 mr-2" />
+                  Leave Room & Back to Home
+                </Button>
+              </div>
             ) : isReviewing ? (
               isHost ? (
                 <div className="flex flex-col gap-3">

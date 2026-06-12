@@ -177,6 +177,14 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       setError(data.message);
     });
 
+    socket.on(SocketEvents.ROOM_PLAY_AGAIN_SUCCESS, ({ room }) => {
+      setRoom(room);
+      setFinalResults(null);
+      setRoundState(null);
+      setLeaderboard([]);
+      if (room) router.push(`/lobby/${room.roomCode}`);
+    });
+
     // Game
     socket.on(SocketEvents.GAME_STARTED, () => {
       setRoom(prev => prev ? { ...prev, status: 'playing' } : null);
@@ -277,6 +285,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       socket.off(SocketEvents.ROOM_HOST_CHANGED);
       socket.off(SocketEvents.ROOM_PLAYER_KICKED);
       socket.off(SocketEvents.ROOM_SETTINGS_UPDATED);
+      socket.off(SocketEvents.ROOM_PLAY_AGAIN_SUCCESS);
       socket.off(SocketEvents.ROOM_ERROR);
       socket.off(SocketEvents.GAME_STARTED);
       socket.off(SocketEvents.GAME_ROUND_START);

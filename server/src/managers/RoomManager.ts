@@ -231,6 +231,15 @@ class RoomManager {
     }
   }
   
+  resetRoomForPlayAgain(roomCode: string) {
+    const room = this.activeRooms.get(roomCode);
+    if (room) {
+      room.status = 'waiting';
+      room.currentRound = 0;
+      Room.updateOne({ roomCode }, { status: 'waiting', currentRound: 0 }).exec().catch(console.error);
+    }
+  }
+
   cleanupRoom(roomCode: string) {
     this.chatHistory.delete(roomCode);
   }
