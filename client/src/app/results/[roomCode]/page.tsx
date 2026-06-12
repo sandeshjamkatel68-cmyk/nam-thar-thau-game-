@@ -113,7 +113,9 @@ export default function ResultsPage() {
                 </h1>
                 <p className="text-text-secondary mt-1">
                   {isReviewing
-                    ? (isHost ? 'Tap any answer to mark it invalid before scores are finalized' : 'Host is verifying answers...')
+                    ? (isHost 
+                      ? 'Verify all answers below — approve legitimate entries and reject any fake or made-up answers' 
+                      : 'The host is verifying answers for accuracy. Rejected answers are highlighted in red.')
                     : `Stopped by: ${(roundState as any).stoppedByName || 'Timer'}`}
                 </p>
               </div>
@@ -202,14 +204,26 @@ export default function ResultsPage() {
               </Button>
             ) : isReviewing ? (
               isHost ? (
-                <Button size="lg" className="w-full" onClick={handleConfirmReview}>
-                  <ShieldCheck className="w-5 h-5 mr-2" />
-                  Confirm Results
-                </Button>
+                <div className="flex flex-col gap-3">
+                  <Button size="lg" className="w-full" onClick={handleConfirmReview}>
+                    <ShieldCheck className="w-5 h-5 mr-2" />
+                    Confirm &amp; Finalize Scores
+                  </Button>
+                  {reviewOverrides.length > 0 && (
+                    <p className="text-xs text-center text-danger font-medium">
+                      ⚠ {reviewOverrides.length} answer{reviewOverrides.length > 1 ? 's' : ''} will be marked as incorrect
+                    </p>
+                  )}
+                </div>
               ) : (
                 <div className="text-center p-4 bg-surface-light rounded-xl border border-white/5">
                   <Loader2 className="w-6 h-6 animate-spin text-primary mx-auto mb-2" />
-                  <p className="text-sm font-medium text-text-secondary">Waiting for host to verify answers...</p>
+                  <p className="text-sm font-medium text-text-secondary">Host is verifying answers for accuracy...</p>
+                  {reviewOverrides.length > 0 && (
+                    <p className="text-xs text-danger mt-2 font-medium">
+                      {reviewOverrides.length} answer{reviewOverrides.length > 1 ? 's' : ''} rejected so far
+                    </p>
+                  )}
                 </div>
               )
             ) : isHost ? (
